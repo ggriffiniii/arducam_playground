@@ -63,7 +63,8 @@ impl<'d, SPI: SpiBus, I2C: I2cTrait> Camera<'d, SPI, I2C> {
         self.wr_sensor_reg8_8(0xff, 0x01).await;
         self.wr_sensor_reg8_8(0x15, 0x00).await;
 
-        self.wr_sensor_regs(ov2640_regs::OV2640_320X240_JPEG).await;
+        self.wr_sensor_regs(ov2640_regs::OV2640_64X64_ROI_JPEG)
+            .await;
 
         Timer::after(Duration::from_millis(1000)).await;
         self.clear_fifo_flag().await;
