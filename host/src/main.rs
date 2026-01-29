@@ -53,50 +53,49 @@ fn main() -> Result<()> {
                 // println!("Received {} bytes", n); // Verbose
                 jpeg_buf.extend_from_slice(&read_buf[..n]);
 
-                // Search for JPEG markers
-                // SOI: FF D8
-                // EOI: FF D9
+                // Sync Marker: AA 55 AA 55
+                // Frame Size: 64 * 64 * 2 = 8192 bytes
 
-                if let Some(start_idx) = find_sequence(&jpeg_buf, &[0xFF, 0xD8]) {
-                    if let Some(end_idx) = find_sequence(&jpeg_buf[start_idx..], &[0xFF, 0xD9]) {
-                        let total_end = start_idx + end_idx + 2;
-                        let frame = &jpeg_buf[start_idx..total_end];
+                if let Some(start_idx) = find_sequence(&jpeg_buf, &[0xAA, 0x55, 0xAA, 0x55]) {
+                    let frame_start = start_idx + 4;
+                    let frame_len = 320 * 240 * 2;
 
-                        // Try decode
-                        match image::load_from_memory_with_format(frame, image::ImageFormat::Jpeg) {
-                            Ok(img) => {
-                                let rgb = img.to_rgb8();
-                                let (width, height) = rgb.dimensions();
+                    if jpeg_buf.len() >= frame_start + frame_len {
+                        let frame_data = &jpeg_buf[frame_start..frame_start + frame_len];
 
-                                // Convert to u32 buffer for minifb (00RRGGBB)
-                                let buffer: Vec<u32> = rgb
-                                    .pixels()
-                                    .map(|p| {
-                                        let r = p[0] as u32;
-                                        let g = p[1] as u32;
-                                        let b = p[2] as u32;
-                                        (r << 16) | (g << 8) | b
-                                    })
-                                    .collect();
+                        let mut buffer: Vec<u32> = Vec::with_capacity(320 * 240);
 
-                                window
-                                    .update_with_buffer(&buffer, width as usize, height as usize)
-                                    .unwrap();
-                                println!("Frame decoded: {}x{}", width, height);
-                            }
-                            Err(e) => {
-                                eprintln!("Decode error: {}", e);
-                            }
+                        for chunk in frame_data.chunks_exact(2) {
+                            let b2 = chunk[0] as u32;
+                            let b1 = chunk[1] as u32;
+
+                            // RGB565: RRRRRGGG GGGBBBBB
+                            // b1: RRRRRGGG
+                            // b2: GGGBBBBB
+
+                            let r5 = (b1 & 0xF8) >> 3;
+                            let g6 = ((b1 & 0x07) << 3) | ((b2 & 0xE0) >> 5);
+                            let b5 = b2 & 0x1F;
+
+                            let r8 = (r5 * 527 + 23) >> 6;
+                            let g8 = (g6 * 259 + 33) >> 6;
+                            let b8 = (b5 * 527 + 23) >> 6;
+
+                            let rgb = (r8 << 16) | (g8 << 8) | b8;
+                            buffer.push(rgb);
                         }
 
-                        // Remove processed data (and anything before it)
-                        jpeg_buf.drain(0..total_end);
+                        window.update_with_buffer(&buffer, 320, 240).unwrap();
+                        println!("Frame decoded: 320x240 Raw");
+
+                        // Remove processed data
+                        jpeg_buf.drain(0..frame_start + frame_len);
                     }
                 }
 
-                // Use a sliding window to prevent buffer from growing indefinitely if no valid frame found
-                if jpeg_buf.len() > 1024 * 512 {
-                    println!("Buffer too large, clearing");
+                // Buffer cleanup
+                if jpeg_buf.len() > 300_000 {
+                    // println!("Buffer too large, clearing");
                     jpeg_buf.clear();
                 }
             }

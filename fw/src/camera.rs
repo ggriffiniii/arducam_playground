@@ -56,15 +56,11 @@ impl<'d, SPI: SpiBus, I2C: I2cTrait> Camera<'d, SPI, I2C> {
         self.wr_sensor_reg8_8(0x12, 0x80).await; // Reset
         Timer::after(Duration::from_millis(100)).await;
 
-        self.wr_sensor_regs(ov2640_regs::OV2640_JPEG_INIT).await;
-        self.wr_sensor_regs(ov2640_regs::OV2640_YUV422).await;
-        self.wr_sensor_regs(ov2640_regs::OV2640_JPEG).await;
+        self.wr_sensor_regs(ov2640_regs::OV2640_QVGA).await;
+        // self.wr_sensor_regs(ov2640_regs::OV2640_64X64_NATIVE).await;
 
         self.wr_sensor_reg8_8(0xff, 0x01).await;
         self.wr_sensor_reg8_8(0x15, 0x00).await;
-
-        self.wr_sensor_regs(ov2640_regs::OV2640_64X64_ROI_JPEG)
-            .await;
 
         Timer::after(Duration::from_millis(1000)).await;
         self.clear_fifo_flag().await;
@@ -97,6 +93,10 @@ impl<'d, SPI: SpiBus, I2C: I2cTrait> Camera<'d, SPI, I2C> {
         let mut rx = [0u8; 1];
         let tx = [BURST_FIFO_READ];
         let _ = self.spi.transfer(&mut rx, &tx).await;
+        // Read Dummy Byte to skip it
+        let mut dummy = [0u8; 1];
+        let zero = [0u8; 1];
+        let _ = self.spi.transfer(&mut dummy, &zero).await;
     }
 
     pub async fn burst_read(&mut self, buf: &mut [u8]) {

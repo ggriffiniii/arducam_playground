@@ -118,6 +118,10 @@ async fn main(spawner: Spawner) {
 
         let len = cam.read_fifo_length().await;
         if len > 0 && len < 0x5FFFF {
+            // Send Sync Marker
+            let sync = [0xAA, 0x55, 0xAA, 0x55];
+            let _ = class.write_packet(&sync).await;
+
             // Read FIFO and send over USB
             cam.burst_read_start().await;
 
